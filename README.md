@@ -31,7 +31,7 @@
 - [x] **Milestone 0 – Khởi tạo Nền tảng (Tuần 01):**
   - Khởi tạo cây thư mục module hóa chuẩn (`src/`, `data/`, `notebooks/`, `models/`, `api/`, `app/`, `docs/`, `reports/`).
   - Cấu hình `.gitignore` cách ly dữ liệu thô, cache và tệp mô hình nhị phân.
-  - Cố định phiên bản thư viện trong `requirements.txt` tương thích Python 3.10+.
+  - Cố định phiên bản thư viện trong `requirements.txt` tương thích Python 3.10 – 3.14 (có `python_version` environment markers cho từng nhánh wheel).
   - Biên soạn tài liệu đặc tả toán học và bộ quy tắc chống rò rỉ dữ liệu ([`docs/problem_definition.md`](docs/problem_definition.md)).
   - Thiết lập sơ đồ kiến trúc hệ thống và ma trận phân công 5 thành viên ([`docs/architecture.md`](docs/architecture.md), [`docs/team_assignment.md`](docs/team_assignment.md)).
   - Khởi tạo hệ thống 7 Milestones và 9 Labels chuyên biệt trên GitHub Remote.
@@ -91,8 +91,13 @@ flowchart LR
 ```text
 PM2.5-Prediction-for-Hanoi/
 ├── .gitignore                          # Quy tắc loại trừ tệp nhị phân, dữ liệu và cache
+├── .github/
+│   └── workflows/
+│       └── ci.yml                      # CI: cài đặt + kiểm thử trên Python 3.10 – 3.14
 ├── README.md                           # Tài liệu tổng quan dự án (Tiếng Việt)
-├── requirements.txt                    # Danh sách thư viện phụ thuộc Python 3.10+
+├── requirements.txt                    # Thư viện phụ thuộc, hỗ trợ Python 3.10 – 3.14
+├── tests/
+│   └── test_environment.py             # Kiểm thử môi trường: import + ràng buộc phiên bản
 │
 ├── configs/                            # Tệp cấu hình tham số hệ thống
 │   ├── data_config.yaml                # Tọa độ trạm, endpoint API và khoảng thời gian
@@ -150,8 +155,18 @@ PM2.5-Prediction-for-Hanoi/
 ## 6. Hướng Dẫn Cài Đặt & Tái Lập Môi Trường
 
 ### Yêu cầu Tiên quyết
-- Python 3.10 trở lên (Khuyến nghị: Python 3.10 – 3.12)
+- **Python 3.10 – 3.14** (đã kiểm chứng phân giải trên cả năm phiên bản)
 - Git
+
+> [!NOTE]
+> **Vì sao `requirements.txt` dùng `python_version` environment markers?**
+> `numpy`, `scipy`, `scikit-learn`, `matplotlib`, `torch` và `pydantic-core` đều là
+> gói **có mã nhị phân**, và bản phát hành mới nhất **không** được đóng gói lại cho
+> các bản Python cũ hơn. Nếu đặt trần phiên bản vô điều kiện (ví dụ `numpy<2.3.0`),
+> trần đó sẽ loại bỏ **mọi** bản phát hành có wheel cho `cp313`/`cp314`, buộc `pip`
+> phải biên dịch từ mã nguồn và cài đặt sẽ thất bại. Mỗi nhánh trong
+> `requirements.txt` là dòng phát hành mới nhất **thực sự có** wheel nhị phân cho
+> đúng phiên bản Python đó.
 
 ### Các bước Triển khai
 ```bash
@@ -169,7 +184,31 @@ source .venv/bin/activate
 
 # 3. Cài đặt các gói phụ thuộc cố định phiên bản
 pip install -r requirements.txt
+
+# 4. Kiểm chứng môi trường (bắt buộc — phải thoát với mã 0)
+pip check
+python -m unittest discover -s tests -v
 ```
+
+### Ma trận phiên bản đã kiểm chứng
+
+Các phiên bản mà bộ phân giải chọn cho từng phiên bản Python (yêu cầu chỉ dùng wheel,
+không biên dịch từ mã nguồn):
+
+| Python | numpy | scipy | pandas | scikit-learn | torch | shap | matplotlib | pydantic |
+|---|---|---|---|---|---|---|---|---|
+| 3.10 | 2.2.6 | 1.15.3 | 2.3.3 | 1.7.2 | 2.14.0 | 0.49.1 | 3.10.9 | 2.10.6 |
+| 3.11 | 2.4.6 | 1.17.1 | 2.3.3 | 1.9.1 | 2.14.0 | 0.51.0 | 3.11.2 | 2.10.6 |
+| 3.12 | 2.5.3 | 1.18.1 | 2.3.3 | 1.9.1 | 2.14.0 | 0.52.0 | 3.11.2 | 2.10.6 |
+| 3.13 | 2.5.3 | 1.18.1 | 2.3.3 | 1.9.1 | 2.14.0 | 0.52.0 | 3.11.2 | 2.10.6 |
+| 3.14 | 2.5.3 | 1.18.1 | 2.3.3 | 1.9.1 | 2.14.0 | 0.52.0 | 3.11.2 | 2.13.5 |
+
+> [!IMPORTANT]
+> Nếu cần mở rộng khoảng hỗ trợ Python (ví dụ thêm 3.15), phải cập nhật **cả ba**
+> nơi sau, nếu không kiểm thử và CI sẽ báo sai:
+> 1. Dòng `# SUPPORTED PYTHON:` trong `requirements.txt`
+> 2. `SUPPORTED_PYTHON_MIN` / `SUPPORTED_PYTHON_MAX` trong `tests/test_environment.py`
+> 3. Ma trận `matrix.python-version` trong `.github/workflows/ci.yml`
 
 ---
 
