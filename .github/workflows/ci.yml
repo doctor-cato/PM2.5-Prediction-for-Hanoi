@@ -1,0 +1,83 @@
+name: CI
+
+# Verifies the two reproducibility properties this project depends on:
+#   1. `pip install -r requirements.txt` resolves to binary wheels on every
+#      interpreter in the declared support window (no source builds).
+#   2. The test suite passes on every interpreter in that window.
+#
+# The Python list below MUST match the SUPPORTED PYTHON banner in
+# requirements.txt. tests/test_environment.py fails if the two drift apart.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux / Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      # --only-binary=:all: makes pip refuse to build from source. If any
+      # upper cap in requirements.txt excludes the only releases that ship
+      # a wheel for this interpreter, this step fails instead of silently
+      # falling back to a compiler. This is the check that guards the
+      # python_version environment markers.
+      - name: Install dependencies (wheels only, no source builds)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --only-binary=:all: -r requirements.txt
+
+      # Catches broken or missing transitive constraints that a plain
+      # install tolerates but that surface later at import time.
+      - name: Verify dependency consistency
+        run: python -m pip check
+
+      - name: Run test suite
+        run: python -m unittest discover -s tests -v
+
+  windows:
+    # The team develops on Windows, so one Windows job guards the platform
+    # the Linux matrix cannot cover.
+    name: Windows / Python 3.12
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies (wheels only, no source builds)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --only-binary=:all: -r requirements.txt
+
+      - name: Verify dependency consistency
+        run: python -m pip check
+
+      - name: Run test suite
+        run: python -m unittest discover -s tests -v
