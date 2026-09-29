@@ -73,7 +73,11 @@ pydantic>=2.6.0,<2.11.0; python_version < "3.14"
 pydantic>=2.12.0,<2.14.0; python_version >= "3.14"
 
 # ── Interactive Web Demo ─────────────────────────────────────
-streamlit>=1.32.0,<1.44.0
+# streamlit capped `packaging` at <24 (1.32.x), <25 (1.33-1.45) and
+# <26 (1.46-1.51). A transitive `pipx` needs packaging>=26, so every
+# streamlit below 1.52.0 makes the environment unsatisfiable and
+# `pip check` fails. 1.52.0 is the first release with no upper cap.
+streamlit>=1.52.0,<2.0.0
 
 # ── Notebook & Development Environment ───────────────────────
 jupyter>=1.0.0
