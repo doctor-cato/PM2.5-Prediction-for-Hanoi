@@ -3,55 +3,60 @@
 
 > **Môn học:** Đồ án Cuối kỳ Trí tuệ Nhân tạo (*Artificial Intelligence Final Project*)  
 > **Bài toán:** Dự báo chuỗi thời gian đa biến có giám sát nồng độ bụi mịn $\text{PM}_{2.5}$ trong 24 giờ tiếp theo ($t + 24\text{h}$)  
-> **Khu vực nghiên cứu:** Thành phố Hà Nội (Trạm quan trắc mặt đất Đại sứ quán Hoa Kỳ & lưới khí tượng bề mặt)  
+> **Khu vực nghiên cứu:** Thành phố Hà Nội (Trạm quan trắc mặt đất Đại sứ quán Hoa Kỳ & lưới khí tượng bề mặt ERA5)  
 > **Dự án nền tảng (Upstream):** [`doctor-cato/air-pollution-analysis`](https://github.com/doctor-cato/air-pollution-analysis)  
-> **Quy mô nhóm:** 5 thành viên (Phân định chuyên trách kỹ thuật + Bảo vệ cá nhân độc lập)
+> **Phương pháp tiếp cận:** Tiến trình mô hình hóa đa tầng (Baseline $\rightarrow$ GBDT $\rightarrow$ Deep Learning)  
+> **Thời lượng thực hiện:** 5–6 tuần  
 
 ---
 
-## 1. Tổng quan Đề tài & Giá trị Thực tiễn
+### Thành Viên Nhóm Dự Án (5 Sinh viên)
 
-Bụi mịn $\text{PM}_{2.5}$ (các hạt bụi có đường kính khí động học $\le 2.5\,\mu\text{m}$) là tác nhân ô nhiễm không khí nguy hại hàng đầu tại các đô thị lớn như Hà Nội. Do kích thước siêu nhỏ, $\text{PM}_{2.5}$ có khả năng thâm nhập sâu vào phế nang phổi và đi vào hệ tuần hoàn máu, gây ra các bệnh lý tim mạch và hô hấp nghiêm trọng.
+| STT | Thành viên | Tài khoản GitHub | Vai trò Kỹ thuật Chuyên trách | Phụ trách Báo cáo & Thuyết trình |
+|:---:|---|---|---|---|
+| 1 | Huy | [@doctor-cato](https://github.com/doctor-cato) | **Nhóm trưởng & Data Lead** (Pipeline nạp dữ liệu, làm sạch, reindex 1h) | Mục 4 & 5 (Dữ liệu & Tiền xử lý), Slide 4 |
+| 2 | Khương | [@lekhuong123456798-cpu](https://github.com/lekhuong123456798-cpu) | **Feature & Baseline Lead** (Đặc tả toán học, Causal Lags, Split, Baseline) | Mục 2, 6, 7 (Bài toán, Features, Baseline) – **Chủ biên Báo cáo** |
+| 3 | Khánh | [@nguyenphanminhkhanh9a-netizen](https://github.com/nguyenphanminhkhanh9a-netizen) | **Classical ML & SHAP Lead** (Random Forest, LightGBM, Tree SHAP) | Mục 8, 9, 14 (Thuật toán, Tham số, SHAP) – **Trưởng thiết kế Slide** |
+| 4 | Hưng | [@ViolaPeracia](https://github.com/ViolaPeracia) | **Deep Learning & Eval Lead** (PyTorch LSTM, Đối sánh độ đo, Sai số đỉnh) | Mục 11, 12, 13 (Thực nghiệm, Kết quả, Phần dư), Slide 8 & 9 |
+| 5 | Hùng | [@Izuki-1780N](https://github.com/Izuki-1780N) | **Serving & Product Lead** (Inference Engine, FastAPI, Streamlit UI) | Mục 10, 15, 16 (Kiến trúc, Demo, Đạo đức), Slide 7 & 11 |
 
-Tại khu vực Hà Nội, nồng độ $\text{PM}_{2.5}$ chịu tác động phức tạp bởi hoạt động giao thông đô thị, mật độ xây dựng, hoạt động công nghiệp tại vùng đồng bằng sông Hồng, đốt phụ phẩm nông nghiệp sau thu hoạch và đặc biệt là hiện tượng **nghịch nhiệt bức xạ mùa đông** (*winter temperature inversion*).
+---
 
-Nếu như dự án Khoa học Dữ liệu thượng nguồn (*Upstream Data Science*) tập trung vào phân tích khám phá (EDA), kiểm định thống kê và phân loại cảnh báo, thì **dự án Trí tuệ Nhân tạo này phát triển một hệ thống học máy hoàn chỉnh để dự báo liên tục nồng độ $\text{PM}_{2.5}$ trước 24 giờ ($t + 24\text{h}$)**:
+## 1. Hiện Trạng Triển Khai vs. Kế Hoạch Lộ Trình
 
-1. **Dự báo chuỗi thời gian đa biến có giám sát:** Kết hợp chuỗi quan trắc nồng độ $\text{PM}_{2.5}$ trong quá khứ với các biến khí tượng bề mặt (nhiệt độ, độ ẩm tương đối, tốc độ gió, hướng gió, lượng mưa, áp suất khí quyển).
-2. **Kỹ nghệ đặc trưng phi rò rỉ (*Leakage-Safe Feature Engineering*):** Xây dựng các đặc trưng trễ (*lags*), thống kê trượt (*rolling statistics*) và mã hóa chu kỳ ngày/mùa hoàn toàn từ quá khứ ($t' \le t$); phân chia tập huấn luyện/kiểm tra nghiêm ngặt theo trình tự thời gian.
-3. **Tiến trình mô hình hóa đa tầng:** Đo đạc thực nghiệm từ mô hình cơ sở ngây thơ (*Naive Persistence Baseline*), hồi quy tuyến tính điều hòa (*Ridge Regression*), cây quyết định tăng cường (*LightGBM / Random Forest*), đến mạng nơ-ron hồi quy chuỗi sâu (*PyTorch LSTM*).
-4. **Giải thích mô hình (*Explainability*):** Ứng dụng Tree SHAP để định lượng mức độ đóng góp của từng yếu tố khí tượng và lịch sử ô nhiễm vào kết quả dự báo.
-5. **Ứng dụng thực tiễn (*Serving & Product*):** Đóng gói mô hình thành dịch vụ REST API bằng FastAPI (`POST /predict`) và giao diện trực quan hóa tương tác Streamlit Web Dashboard phục vụ cộng đồng.
+> [!IMPORTANT]
+> **Phân định minh bạch giữa mã nguồn hiện có và kế hoạch tương lai:**  
+> Dự án đang ở giai đoạn **Tuần 01 – Milestone 0 (Khởi tạo Nền tảng & Đặc tả Bài toán)**. Toàn bộ các pipeline thu thập dữ liệu, huấn luyện mô hình học máy, dịch vụ API và giao diện Web Dashboard là kế hoạch đặc tả kỹ thuật và sẽ được hiện thực hóa tuần tự theo 7 Milestones chuẩn mực (#01 – #22).
+
+- [x] **Milestone 0 – Khởi tạo Nền tảng (Tuần 01):**
+  - Khởi tạo cây thư mục module hóa chuẩn (`src/`, `data/`, `notebooks/`, `models/`, `api/`, `app/`, `docs/`, `reports/`).
+  - Cấu hình `.gitignore` cách ly dữ liệu thô, cache và tệp mô hình nhị phân.
+  - Cố định phiên bản thư viện trong `requirements.txt` tương thích Python 3.10+.
+  - Biên soạn tài liệu đặc tả toán học và bộ quy tắc chống rò rỉ dữ liệu ([`docs/problem_definition.md`](docs/problem_definition.md)).
+  - Thiết lập sơ đồ kiến trúc hệ thống và ma trận phân công 5 thành viên ([`docs/architecture.md`](docs/architecture.md), [`docs/team_assignment.md`](docs/team_assignment.md)).
+  - Khởi tạo hệ thống 7 Milestones và 9 Labels chuyên biệt trên GitHub Remote.
+- [ ] **Milestone 1 – Đặc tả Bài toán & Nền tảng Dữ liệu (Tuần 01):** Xây dựng pipeline thu thập dữ liệu tự động OpenAQ và Open-Meteo ([Issue #05]); kiểm toán chất lượng và căn chỉnh lưới thời gian 1 giờ ([Issue #06]).
+- [ ] **Milestone 2 – Tiền Xử lý & Kỹ nghệ Đặc trưng (Tuần 02):** Tạo biến mục tiêu $PM_{2.5}(t+24\text{h})$ ([Issue #07]); xây dựng đặc trưng trễ nhân quả và thống kê trượt ([Issue #08]); phân chia chuỗi thời gian tuyến tính 70/15/15 và cô lập bộ chuẩn hóa ([Issue #09]); kiểm toán zero-leakage ([Issue #10]).
+- [ ] **Milestone 3 – Baseline & Học máy Cổ điển (Tuần 03):** Xây dựng baseline Persistence và hồi quy Ridge ([Issue #11]); huấn luyện Random Forest và LightGBM ([Issue #12]); tối ưu siêu tham số trên Validation ([Issue #13]).
+- [ ] **Milestone 4 – Học sâu & Đánh giá Toàn diện (Tuần 04):** Phát triển mạng chuỗi sâu PyTorch LSTM ([Issue #14]); đánh giá đối sánh trên tập Test và kiểm toán sai số đỉnh ([Issue #15]); minh bạch hóa bằng Tree SHAP ([Issue #16]).
+- [ ] **Milestone 5 – Đóng gói Suy luận, API & Demo (Tuần 05):** Đóng gói engine suy luận `PM25Forecaster` ([Issue #17]); xây dựng dịch vụ REST API bằng FastAPI ([Issue #18]); phát triển Web Dashboard tương tác bằng Streamlit ([Issue #19]).
+- [ ] **Milestone 6 – Bàn giao Đồ án & Chuẩn bị Bảo vệ (Tuần 06):** Hoàn thiện Báo cáo PDF cuối kỳ 15–20 trang ([Issue #20]); thiết kế bộ 12 slide bảo vệ ([Issue #21]); kiểm toán tái lập môi trường sạch và luyện tập Viva 15 câu hỏi ([Issue #22]).
+
+---
+
+## 2. Tổng Quan Đề Tài & Giá Trị Thực Tiễn
+
+Bụi mịn $\text{PM}_{2.5}$ (đường kính khí động học $\le 2.5\,\mu\text{m}$) là tác nhân ô nhiễm môi trường nguy hiểm hàng đầu tại Hà Nội do khả năng thâm nhập sâu vào phế nang phổi và mạch máu. Đề tài tập trung xây dựng một hệ thống học máy có khả năng:
+
+1. **Dự báo chuỗi thời gian đa biến có giám sát:** Dự báo nồng độ $\text{PM}_{2.5}$ liên tục trước 24 giờ ($t + 24\text{h}$) từ lịch sử ô nhiễm và 6 yếu tố khí tượng bề mặt (nhiệt độ, độ ẩm, tốc độ gió, hướng gió, lượng mưa, áp suất khí quyển).
+2. **Kỹ nghệ đặc trưng nhân quả (*Causal Feature Engineering*):** Trích xuất các biến trễ ($t-1$ đến $t-24$), giá trị trung bình trượt (6h, 12h, 24h) và chu kỳ thời gian lượng giác $\sin/\cos$ hoàn toàn từ quá khứ ($t' \le t$).
+3. **Tiến trình mô hình hóa có kiểm chứng:** So sánh từ mô hình cơ sở ngây thơ (*Naive Persistence*), hồi quy điều hòa Ridge, cây tăng cường gradient (*LightGBM / Random Forest*) đến mạng chuỗi hồi quy sâu (*PyTorch LSTM*).
+4. **Giải thích mô hình (*Explainability*):** Ứng dụng Tree SHAP để định lượng vai trò phát tán của gió và cơ chế tích tụ bụi do độ ẩm cao.
+5. **Ứng dụng thực tế (*Serving & UI*):** Cung cấp API suy luận thời gian thực qua FastAPI và giao diện trực quan hóa tương tác qua Streamlit Dashboard.
 
 > [!NOTE]
-> **Tuyên bố Phạm vi Đạo đức & Khuyến cáo Thực tiễn:**  
-> Hệ thống dự báo này được phát triển như một công cụ nghiên cứu học thuật hỗ trợ cảnh báo sớm. Kết quả dự báo của mô hình **không thay thế** các bản tin quan trắc quy chuẩn hoặc cảnh báo chính thức từ Sở Tài nguyên và Môi trường Hà Nội (DONRE) hay Bộ Tài nguyên và Môi trường (MONRE).
-
----
-
-## 2. Mối Liên Hệ Với Dự Án Khoa Học Dữ Liệu Thượng Nguồn
-
-Dự án AI kế thừa có chọn lọc các tiêu chuẩn quản trị dữ liệu từ repository Data Science tiền đề ([`doctor-cato/air-pollution-analysis`](https://github.com/doctor-cato/air-pollution-analysis)), đồng thời thiết lập một pipeline AI/ML độc lập, khép kín:
-
-```text
-Dự án Khoa học Dữ liệu (CRISP-DM)
-   │
-   ├── Lược đồ dữ liệu chuẩn hóa (Canonical Data Schema)
-   ├── Quy ước xử lý khuyết thiếu (Strict Missingness Protocol)
-   └── Kiểm toán tính hợp lý vật lý (Physical Validation Constraints)
-   ▼
-Tập dữ liệu tích hợp đã xác thực (Hourly Parquet)
-   ▼
-Dự án Trí tuệ Nhân tạo (PM2.5-Prediction-for-Hanoi)
-   │
-   ├── [1] Kỹ nghệ đặc trưng chuỗi thời gian (Lags, Rolling Means, Sin/Cos Cycles)
-   ├── [2] Phân chia chuỗi thời gian tuyến tính (Train 70% | Val 15% | Test 15%)
-   ├── [3] Bộ mô hình AI (Persistence, Ridge, LightGBM, PyTorch LSTM)
-   ├── [4] Đánh giá đa chỉ số chuẩn mực (MAE, RMSE, R², Sai số đợt đỉnh)
-   ├── [5] Giải thích khí tượng bằng Tree SHAP
-   ├── [6] Đóng gói Inference Engine độc lập (PM25Forecaster)
-   └── [7] Giao diện người dùng & API (FastAPI REST Service + Streamlit Dashboard)
-```
+> **Khuyến cáo Đạo đức & Giới hạn Pháp lý:**  
+> Hệ thống được thiết kế như một công cụ nghiên cứu học thuật hỗ trợ cảnh báo sớm. Kết quả dự báo **không thay thế** các bản tin quan trắc tiêu chuẩn hoặc cảnh báo chính thức từ Sở TN&MT Hà Nội (DONRE) hay Bộ TN&MT (MONRE).
 
 ---
 
@@ -59,7 +64,7 @@ Dự án Trí tuệ Nhân tạo (PM2.5-Prediction-for-Hanoi)
 
 ```mermaid
 flowchart LR
-    subgraph DataEngine["1. Tầng Dữ liệu & Xử lý"]
+    subgraph DataEngine["1. Tầng Dữ liệu & Tiền xử lý"]
         Raw["OpenAQ & Open-Meteo APIs"] --> Clean["Làm sạch & Đồng bộ 1h"]
         Clean --> Features["Lags (1-24h) + Rolling (6-24h) + Cyclical"]
         Features --> Split["Phân chia Tuyến tính (70/15/15)"]
@@ -122,44 +127,27 @@ PM2.5-Prediction-for-Hanoi/
     ├── problem_definition.md           # Đặc tả bài toán toán học & chống rò rỉ dữ liệu
     ├── architecture.md                 # Sơ đồ kiến trúc & giao diện các module
     ├── team_assignment.md              # Ma trận phân công nhiệm vụ 5 thành viên
-    ├── github_issues.md                # Toàn văn đặc tả 16 GitHub Issues (#01 – #16)
+    ├── github_issues.md                # Toàn văn đặc tả 22 GitHub Issues (#01 – #22)
     └── defense_preparation.md          # Bộ câu hỏi vấn đáp Viva (15 câu hỏi trọng tâm)
 ```
 
 ---
 
-## 5. Phân Công Nhiệm Vụ Nhóm 5 Thành Viên
+## 5. Lộ Trình 7 Milestones & Ánh Xạ Biểu Điểm (5–6 Tuần)
 
-| Thành viên | Vai trò Kỹ thuật Chuyên trách | Module & Issues Phụ trách | Phần Báo cáo & Thuyết trình | Trọng tâm Vấn đáp Viva |
-|---|---|---|---|---|
-| **Thành viên 1** | **Trưởng nhóm Kỹ thuật Dữ liệu** (*Data Engineering Lead*) | #01, #03, #04, #16<br>• Pipeline thu thập OpenAQ & Open-Meteo<br>• Làm sạch tất định & reindex lưới 1h<br>• Kiểm toán tái lập môi trường sạch | • Mục 4: Tập dữ liệu & Xuất xứ<br>• Mục 5: Tiền xử lý & Kiểm toán<br>• Slide 4: Thu thập & Vệ sinh dữ liệu<br>• Đóng gói tệp ZIP nộp bài | Quy trình nạp dữ liệu, xử lý mất dữ liệu, logic vật lý, tính liên tục của chuỗi thời gian |
-| **Thành viên 2** | **Trưởng nhóm Kỹ nghệ Đặc trưng & Baseline** (*Feature & Baseline Lead*) | #02, #05, #06, #14<br>• Đặc tả bài toán toán học<br>• Sinh lags, rolling stats & chia tập<br>• Mô hình Persistence & Ridge | • Mục 2: Phát biểu Bài toán<br>• Mục 6: Kỹ nghệ Đặc trưng<br>• Mục 7: Phương pháp AI Đề xuất<br>• Slide 3 & 5: Bài toán & Đặc trưng<br>• **Chủ biên Báo cáo PDF Cuối kỳ** | Cơ chế chống rò rỉ thời gian (*Temporal Leakage*), căn cứ chọn lags, baseline Persistence |
-| **Thành viên 3** | **Trưởng nhóm Học máy Cổ điển & SHAP** (*Classical ML & Explainability Lead*) | #07, #10, #15<br>• Random Forest & LightGBM<br>• Tối ưu siêu tham số trên Validation<br>• Phân tích đóng góp Tree SHAP | • Mục 8: Phân tích Thuật toán<br>• Mục 9: Siêu tham số Mô hình<br>• Mục 14: Giải thích Mô hình (SHAP)<br>• Slide 6 & 10: Mô hình ML & SHAP<br>• **Phụ trách Thiết kế Slide Deck** | Bản chất thuật toán GBDT, căn cứ chọn siêu tham số, giải thích tương tác khí tượng qua SHAP |
-| **Thành viên 4** | **Trưởng nhóm Học sâu & Đánh giá** (*Deep Learning & Evaluation Lead*) | #08, #09<br>• Bộ dữ liệu chuỗi 3D cho LSTM<br>• Vòng lặp huấn luyện PyTorch LSTM<br>• Bảng tổng hợp đối sánh độ đo<br>• Kiểm toán sai số đợt ô nhiễm cực đoan | • Mục 11: Thiết kế Thực nghiệm<br>• Mục 12: Kết quả Thực nghiệm<br>• Mục 13: So sánh Mô hình & Phần dư<br>• Slide 8 & 9: Kết quả & Phân tích sai số | Mô hình học sâu chuỗi thời gian, hội tụ hàm mất mát, phân tích nguyên nhân lệch ở các đỉnh ô nhiễm |
-| **Thành viên 5** | **Trưởng nhóm Đóng gói Ứng dụng & Triển khai** (*Application & Deployment Lead*) | #11, #12, #13<br>• Pipeline suy luận `PM25Forecaster`<br>• Dịch vụ REST API (FastAPI)<br>• Web Dashboard tương tác (Streamlit) | • Mục 10: Kiến trúc Hệ thống<br>• Mục 15: Ứng dụng & Demo Thực tế<br>• Mục 16: Giới hạn Hệ thống & Đạo đức<br>• Slide 7 & 11: Kiến trúc & Demo Sản phẩm | Kiến trúc vận hành, độ trễ suy luận thời gian thực, xử lý lỗi khi thiếu dữ liệu đầu vào |
-
----
-
-## 6. Lộ Trình Triển Khai 5–6 Tuần (Roadmap)
-
-```text
-Tuần 1: M0 Khởi tạo & M1 Đặc tả Bài toán & M2 Pipeline Thu thập Dữ liệu
-        └── Issues #01, #02, #03
-Tuần 2: M3 Làm sạch & Căn chỉnh & M4 Kỹ nghệ Đặc trưng & M5 Baseline
-        └── Issues #04, #05, #06
-Tuần 3: M5 Huấn luyện Học máy Cổ điển (LightGBM & Random Forest) & Tinh chỉnh
-        └── Issue #07
-Tuần 4: M6 Mạng Học sâu PyTorch LSTM & M7 Đánh giá Tổng thể & Phân tích SHAP
-        └── Issues #08, #09, #10
-Tuần 5: M8 Đóng gói Mô hình & M9 Dịch vụ FastAPI & Streamlit Dashboard & Viết Báo cáo
-        └── Issues #11, #12, #13
-Tuần 6: M10 Hoàn thiện Báo cáo PDF & Slide Thuyết trình & M11 Kiểm toán Tái lập & Vấn đáp Viva
-        └── Issues #14, #15, #16
-```
+| Cột mốc (Milestone) | Nội dung Trọng tâm | Issues | Ánh xạ Biểu điểm Giảng viên |
+|---|---|:---:|---|
+| **M0: Project Foundation** | Khởi tạo repo, quy ước nhóm, đặc tả toán học, kiến trúc | #01–#03 | **Tiêu chí 1 (3.0 điểm):** Phân tích bài toán, phân công nhóm |
+| **M1: Problem & Data Foundation** | Khế ước upstream, pipeline nạp OpenAQ/Meteo, kiểm toán 1h | #04–#06 | **Tiêu chí 1 (3.0 điểm):** Lựa chọn nguồn và phương pháp |
+| **M2: Preparation & Features** | Mục tiêu $t+24\text{h}$, lags, rolling stats, split 70/15/15 | #07–#10 | **Tiêu chí 2 (4.0 điểm):** Tiền xử lý, chống rò rỉ dữ liệu |
+| **M3: Baseline & Classical ML** | Persistence, Ridge, Random Forest, LightGBM, Tuning | #11–#13 | **Tiêu chí 2 (4.0 điểm):** Thuật toán học máy, tham số |
+| **M4: Deep Learning & Evaluation** | PyTorch LSTM, kiểm toán sai số đỉnh, giải thích SHAP | #14–#16 | **Tiêu chí 2 & 3 (5.0 điểm):** Học sâu, đánh giá & phần dư |
+| **M5: Inference, API & Demo** | `PM25Forecaster`, FastAPI REST Service, Streamlit UI | #17–#19 | **Tiêu chí 2 (4.0 điểm):** Lập trình hệ thống & ứng dụng |
+| **M6: Deliverables & Defense** | Báo cáo PDF 15–20 trang, 12 slides, kiểm toán môi trường sạch | #20–#22 | **Tiêu chí 4 (2.0 điểm):** Báo cáo, thuyết trình & vấn đáp Viva |
 
 ---
 
-## 7. Hướng Dẫn Cài Đặt & Tái Lập Môi Trường
+## 6. Hướng Dẫn Cài Đặt & Tái Lập Môi Trường
 
 ### Yêu cầu Tiên quyết
 - Python 3.10 trở lên (Khuyến nghị: Python 3.10 – 3.12)
@@ -185,8 +173,8 @@ pip install -r requirements.txt
 
 ---
 
-## 8. Nguyên Tắc Kỹ Thuật & Cam Kết Liêm Chính Học Thuật
+## 7. Cam Kết Liêm Chính Học Thuật & Chống Rò Rỉ Dữ Liệu
 
-1. **Tuyệt đối không ngụy tạo số liệu:** Mọi chỉ số đánh giá ($R^2$, MAE, RMSE) trong báo cáo và slide đều là kết quả thực tế đo đạc trên tập kiểm tra độc lập (*Test Set*).
-2. **Triệt tiêu rò rỉ dữ liệu chuỗi thời gian (*Zero Temporal Leakage*):** Cấm tuyệt đối việc sử dụng `train_test_split` ngẫu nhiên. Mọi phép chuẩn hóa (*Scaler*) chỉ được học trên tập Train.
-3. **Tuân thủ nguyên tắc thực dụng (Ponytail / YAGNI):** Ưu tiên hệ thống hoạt động ổn định, có tính giải thích cao và mã nguồn sạch sẽ, tránh đưa vào các kiến trúc Transformer cồng kềnh không khả thi trong quỹ thời gian 5–6 tuần.
+1. **Tuyệt đối không ngụy tạo số liệu:** Toàn bộ bảng chỉ số ($R^2$, MAE, RMSE) trong báo cáo và slide phản ánh trung thực kết quả chạy code trên tập Test độc lập.
+2. **Triệt tiêu rò rỉ dữ liệu chuỗi thời gian (*Zero Temporal Leakage*):** Nghiêm cấm phân chia ngẫu nhiên. Mọi phép chuẩn hóa (`StandardScaler`) chỉ được huấn luyện trên tập Train.
+3. **Tuân thủ nguyên tắc thực dụng (Ponytail / YAGNI):** Ưu tiên mã nguồn sạch, hệ thống chạy ổn định và giải thích được bản chất vật lý hơn là đưa vào các kiến trúc quá phức tạp không khả thi trong 5–6 tuần.
